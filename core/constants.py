@@ -27,6 +27,31 @@ RENT_CATEGORIES = [
 
 ALL_CATEGORIES = SALE_CATEGORIES + RENT_CATEGORIES
 
+# Divar Kenar Open API Category Mapping
+DIVAR_TO_CANONICAL_CATEGORY = {
+    "apartment-sell": CATEGORY_APARTMENT_SALE,
+    "apartment-sale": CATEGORY_APARTMENT_SALE,
+    "house-villa-sell": CATEGORY_HOUSE_VILLA_SALE,
+    "house-villa-sale": CATEGORY_HOUSE_VILLA_SALE,
+    "plot-old": CATEGORY_LAND_SALE,
+    "land-sale": CATEGORY_LAND_SALE,
+    "commercial-sell": CATEGORY_COMMERCIAL_SALE,
+    "commercial-sale": CATEGORY_COMMERCIAL_SALE,
+    "apartment-rent": CATEGORY_APARTMENT_RENT,
+    "house-villa-rent": CATEGORY_HOUSE_VILLA_RENT,
+    "commercial-rent": CATEGORY_COMMERCIAL_RENT,
+}
+
+CANONICAL_TO_DIVAR_CATEGORY = {
+    CATEGORY_APARTMENT_SALE: "apartment-sell",
+    CATEGORY_HOUSE_VILLA_SALE: "house-villa-sell",
+    CATEGORY_LAND_SALE: "plot-old",
+    CATEGORY_COMMERCIAL_SALE: "commercial-sell",
+    CATEGORY_APARTMENT_RENT: "apartment-rent",
+    CATEGORY_HOUSE_VILLA_RENT: "house-villa-rent",
+    CATEGORY_COMMERCIAL_RENT: "commercial-rent",
+}
+
 CATEGORY_CHOICES = [
     (CATEGORY_APARTMENT_SALE, "Apartment Sale / فروش آپارتمان"),
     (CATEGORY_HOUSE_VILLA_SALE, "House & Villa Sale / فروش خانه و ویلا"),

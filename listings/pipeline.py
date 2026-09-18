@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from django.utils import timezone as django_tz
 from core.constants import (
+    DIVAR_TO_CANONICAL_CATEGORY,
     EVENT_AREA_CHANGE,
     EVENT_INITIAL,
     EVENT_PRICE_DECREASE,
@@ -25,16 +26,31 @@ from core.normalizers import (
     parse_iranian_price,
     to_english_digits,
 )
-from core.tehran_data import suggest_district_for_neighborhood
+from core.tehran_data import (
+    get_district_by_coordinates,
+    suggest_district_for_neighborhood,
+    suggest_neighborhood_display_name,
+)
 from ingestion.models import SearchPartition
 from listings.models import DivarListing, ListingSnapshot, SearchPartitionExecution
 
 logger = logging.getLogger(__name__)
 
+ROOM_WORDS = {
+    "بدون": 0,
+    "صفر": 0,
+    "یک": 1,
+    "دو": 2,
+    "سه": 3,
+    "چهار": 4,
+    "پنج": 5,
+    "شش": 6,
+}
+
 
 class ListingDataCleaner:
     """
-    Validates and cleans raw listing dictionaries from the Divar API.
+    Validates and cleans raw listing dictionaries from the Divar API (both search & full detail).
     """
 
     @classmethod
@@ -43,18 +59,34 @@ class ListingDataCleaner:
         Takes raw dictionary from Divar API response and returns normalized dictionary.
         Returns None if listing violates basic validity (missing token, zero/invalid price, impossible area).
         """
+        data = raw.get("data", {}) if isinstance(raw.get("data"), dict) else {}
+        attrs = data.get("other_options_and_attributes", {}) if isinstance(data.get("other_options_and_attributes"), dict) else {}
+
         token = raw.get("token") or raw.get("divar_token")
         if not token:
             logger.warning("Dropped listing with missing token")
             return None
 
-        title = clean_persian_text(raw.get("title", ""))
-        desc = clean_persian_text(raw.get("description", ""))
-        category = raw.get("category", "apartment-sale")
-        city = (raw.get("city") or "tehran").lower()
+        raw_title = data.get("title") or raw.get("title", "")
+        title = clean_persian_text(raw_title)
+
+        raw_desc = data.get("description") or raw.get("description", "")
+        desc = clean_persian_text(raw_desc)
+
+        # Normalize category to canonical slug
+        raw_cat = raw.get("category") or data.get("category", "apartment-sale")
+        category = DIVAR_TO_CANONICAL_CATEGORY.get(raw_cat, raw_cat)
+
+        city = (raw.get("city") or data.get("city") or "tehran").lower()
 
         # Parse & normalize area
-        raw_area = raw.get("area_m2") or raw.get("size") or raw.get("area")
+        raw_area = (
+            data.get("size")
+            or attrs.get("size")
+            or raw.get("area_m2")
+            or raw.get("size")
+            or raw.get("area")
+        )
         area_m2 = None
         if raw_area is not None:
             try:
@@ -69,16 +101,29 @@ class ListingDataCleaner:
             area_m2 = None
 
         # Parse price fields
-        raw_price = raw.get("price")
-        raw_rent = raw.get("rent")
-        raw_deposit = raw.get("deposit") or raw.get("credit")
+        price_obj = data.get("price") or raw.get("price")
+        if isinstance(price_obj, dict):
+            raw_price = price_obj.get("value")
+            price_mode = price_obj.get("mode", "total")
+        else:
+            raw_price = price_obj
+            price_mode = raw.get("price_mode", "total")
 
         price = parse_iranian_price(raw_price)
+
+        raw_rent = data.get("rent") or attrs.get("rent") or raw.get("rent")
+        raw_deposit = (
+            data.get("deposit")
+            or data.get("credit")
+            or attrs.get("credit")
+            or raw.get("deposit")
+            or raw.get("credit")
+        )
+
         rent = parse_iranian_price(raw_rent)
         deposit = parse_iranian_price(raw_deposit)
 
         # Basic validity filter for sale listings:
-        # In Tehran, an entire property for sale under 50 Million Tomans is a dummy/deposit placeholder
         if category in SALE_CATEGORIES and price is not None and price < 50_000_000:
             price = None
 
@@ -95,34 +140,70 @@ class ListingDataCleaner:
             if deposit and deposit > 0:
                 deposit_per_m2 = int(round(deposit / area_m2))
 
-        # Location normalization
-        neighborhood = clean_persian_text(raw.get("neighborhood", ""))
-        district = raw.get("district")
-        if district is not None:
-            try:
-                district = int(to_english_digits(district))
-                if district < 1 or district > 22:
-                    district = None
-            except (ValueError, TypeError):
-                district = None
+        # Location and neighborhood normalization
+        raw_district = raw.get("district") or data.get("district")
+        neighborhood = ""
+        district = None
 
-        if district is None and neighborhood:
-            district = suggest_district_for_neighborhood(neighborhood)
+        if raw_district is not None:
+            # Check if it's already an integer district (1-22)
+            try:
+                num = int(to_english_digits(str(raw_district)))
+                if 1 <= num <= 22:
+                    district = num
+            except (ValueError, TypeError):
+                pass
+
+        if district is None and raw_district:
+            district = suggest_district_for_neighborhood(raw_district)
+            neighborhood = suggest_neighborhood_display_name(raw_district)
+
+        if not neighborhood and raw.get("neighborhood"):
+            neighborhood = clean_persian_text(raw.get("neighborhood"))
+            if not district:
+                district = suggest_district_for_neighborhood(neighborhood)
 
         # Coordinate normalization
-        lat = raw.get("latitude") or raw.get("lat")
-        lon = raw.get("longitude") or raw.get("long") or raw.get("lon")
+        lat = data.get("latitude") or raw.get("latitude") or raw.get("lat")
+        lon = data.get("longitude") or raw.get("longitude") or raw.get("long") or raw.get("lon")
         try:
             lat = float(lat) if lat is not None else None
             lon = float(lon) if lon is not None else None
-            # Validate Tehran coordinate bounds (~35.5 - 35.9 lat, ~51.1 - 51.6 lon)
+            # Validate Tehran coordinate bounds (~35.4 - 36.0 lat, ~51.0 - 51.8 lon)
             if lat and lon:
                 if not (35.4 <= lat <= 36.0 and 51.0 <= lon <= 51.8):
                     lat, lon = None, None
+                elif not district:
+                    district = get_district_by_coordinates(lat, lon)
         except (ValueError, TypeError):
             lat, lon = None, None
 
-        # Property attributes
+        # Building age normalization (support Solar Hijri years like 1397 -> 1405 - 1397 = 8)
+        raw_year = data.get("year") or attrs.get("year") or raw.get("building_age") or raw.get("age")
+        building_age = None
+        if raw_year is not None:
+            try:
+                y_val = int(to_english_digits(str(raw_year)))
+                if 1350 <= y_val <= 1405:
+                    building_age = max(0, 1405 - y_val)
+                elif y_val < 100:
+                    building_age = y_val
+            except (ValueError, TypeError):
+                building_age = None
+
+        # Room count normalization (support Persian words 'یک', 'دو', 'سه' ...)
+        raw_rooms = attrs.get("rooms") or data.get("rooms") or raw.get("rooms")
+        rooms = None
+        if raw_rooms is not None:
+            clean_r = str(raw_rooms).strip()
+            if clean_r in ROOM_WORDS:
+                rooms = ROOM_WORDS[clean_r]
+            else:
+                try:
+                    rooms = int(to_english_digits(clean_r))
+                except (ValueError, TypeError):
+                    rooms = None
+
         def safe_int(val):
             if val is None:
                 return None
@@ -132,10 +213,8 @@ class ListingDataCleaner:
             except (ValueError, TypeError):
                 return None
 
-        rooms = safe_int(raw.get("rooms"))
-        floor = safe_int(raw.get("floor"))
-        total_floors = safe_int(raw.get("total_floors"))
-        building_age = safe_int(raw.get("building_age") or raw.get("age"))
+        floor = safe_int(attrs.get("floor") or data.get("floor") or raw.get("floor"))
+        total_floors = safe_int(attrs.get("floors_count") or data.get("total_floors") or raw.get("total_floors"))
 
         # Amenities
         def bool_val(v):
@@ -146,10 +225,10 @@ class ListingDataCleaner:
                 return v_clean in ("true", "1", "دارد", "yes")
             return False
 
-        parking = bool_val(raw.get("parking"))
-        elevator = bool_val(raw.get("elevator"))
-        storage = bool_val(raw.get("storage"))
-        balcony = bool_val(raw.get("balcony"))
+        parking = bool_val(data.get("parking") or attrs.get("parking") or raw.get("parking"))
+        elevator = bool_val(data.get("elevator") or attrs.get("elevator") or raw.get("elevator"))
+        storage = bool_val(attrs.get("warehouse") or attrs.get("storage") or raw.get("storage"))
+        balcony = bool_val(attrs.get("balcony") or data.get("balcony") or raw.get("balcony"))
 
         return {
             "divar_token": str(token).strip(),
@@ -163,7 +242,7 @@ class ListingDataCleaner:
             "longitude": lon,
             "address_text": raw.get("address_text", ""),
             "price": price,
-            "price_mode": raw.get("price_mode", "total"),
+            "price_mode": price_mode,
             "rent": rent,
             "deposit": deposit,
             "area_m2": area_m2,
@@ -308,14 +387,31 @@ class ListingIngestionService:
 
             # Update listing fields
             existing.title = clean["title"]
-            existing.description = clean["description"]
-            existing.price = clean["price"]
-            existing.rent = clean["rent"]
-            existing.deposit = clean["deposit"]
-            existing.area_m2 = clean["area_m2"]
-            existing.price_per_m2 = clean["price_per_m2"]
-            existing.rent_per_m2 = clean["rent_per_m2"]
-            existing.deposit_per_m2 = clean["deposit_per_m2"]
+            if clean["description"]:
+                existing.description = clean["description"]
+            if clean["price"]:
+                existing.price = clean["price"]
+            if clean["rent"]:
+                existing.rent = clean["rent"]
+            if clean["deposit"]:
+                existing.deposit = clean["deposit"]
+            if clean["area_m2"]:
+                existing.area_m2 = clean["area_m2"]
+            if clean["price_per_m2"]:
+                existing.price_per_m2 = clean["price_per_m2"]
+            if clean["rent_per_m2"]:
+                existing.rent_per_m2 = clean["rent_per_m2"]
+            if clean["deposit_per_m2"]:
+                existing.deposit_per_m2 = clean["deposit_per_m2"]
+            if clean["district"]:
+                existing.district = clean["district"]
+            if clean["neighborhood"]:
+                existing.neighborhood = clean["neighborhood"]
+            if clean["rooms"] is not None:
+                existing.rooms = clean["rooms"]
+            if clean["building_age"] is not None:
+                existing.building_age = clean["building_age"]
+
             existing.status = "active"
             existing.last_seen_at = now
             existing.raw_json = clean["raw_json"]

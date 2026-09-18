@@ -239,6 +239,165 @@ TEHRAN_DISTRICTS: Dict[int, Dict] = {
     },
 }
 
+# Divar neighborhood slug to municipal district and Persian name mapping
+DIVAR_SLUG_TO_DISTRICT: Dict[str, Tuple[int, str]] = {
+    # District 1
+    "tajrish": (1, "تجریش"),
+    "zafaraniyeh": (1, "زعفرانیه"),
+    "elahiyeh": (1, "الهیه"),
+    "niavaran": (1, "نیاوران"),
+    "velenjak": (1, "ولنجک"),
+    "farmaniyeh": (1, "فرمانیه"),
+    "gheytariyeh": (1, "قیطریه"),
+    "kamraniyeh": (1, "کامرانیه"),
+    "mahmoodiyeh": (1, "محمودیه"),
+    "sohanak": (1, "سوهانک"),
+    "darabad": (1, "دارآباد"),
+    "aghdasieh": (1, "اقدسیه"),
+    "ajodaniyeh": (1, "آجودانیه"),
+    "chizar": (1, "چیذر"),
+
+    # District 2
+    "saadat-abad": (2, "سعادت‌آباد"),
+    "shahrak-e-gharb": (2, "شهرک غرب"),
+    "gisha": (2, "گیشا"),
+    "sattarkhan": (2, "ستارخان"),
+    "marzdaran": (2, "مرزداران"),
+    "shahr-e-ara": (2, "شهرآرا"),
+    "tarasht": (2, "طرشت"),
+    "tehran-vila": (2, "تهران‌ویلا"),
+    "tohid": (2, "توحید"),
+
+    # District 3
+    "vanak": (3, "ونک"),
+    "mirdamad": (3, "میرداماد"),
+    "zafar": (3, "ظفر"),
+    "jordan": (3, "جردن"),
+    "gholhak": (3, "قلهک"),
+    "darous": (3, "دروس"),
+    "pasdaran": (3, "پاسداران"),
+    "ekhtiyariyeh": (3, "اختیاریه"),
+    "davoodiyeh": (3, "داوودیه"),
+
+    # District 4
+    "tehranpars-western": (4, "تهرانپارس غربی"),
+    "tehranpars-eastern": (4, "تهرانپارس شرقی"),
+    "tehranpars": (4, "تهرانپارس"),
+    "heravi": (4, "هروی"),
+    "hossein-abad": (4, "حسین‌آباد"),
+    "lavizan": (4, "لویزان"),
+    "shams-abad": (4, "شمس‌آباد"),
+
+    # District 5
+    "sadeghiyeh": (5, "صادقیه"),
+    "poonak": (5, "پونک"),
+    "shahran": (5, "شهران"),
+    "central-janat-abad": (5, "جنت‌آباد مرکزی"),
+    "northern-janat-abad": (5, "جنت‌آباد شمالی"),
+    "southern-janat-abad": (5, "جنت‌آباد جنوبی"),
+    "ekbatan": (5, "اکباتان"),
+    "eastern-ferdows": (5, "فردوس شرق"),
+    "western-ferdows": (5, "فردوس غرب"),
+    "bagh-e-feyz": (5, "باغ فیض"),
+    "kousar": (5, "کوهسار"),
+
+    # District 6
+    "yousef-abad": (6, "یوسف‌آباد"),
+    "north-karegar": (6, "کارگر شمالی"),
+    "amirabad": (6, "امیرآباد"),
+    "fatemi": (6, "فاطمی"),
+    "keshavarz-blvd": (6, "بلوار کشاورز"),
+    "valiasr-sq": (6, "میدان ولیعصر"),
+    "karimkhan": (6, "کریم‌خان"),
+    "gandi": (6, "گاندی"),
+    "tavanir": (6, "توانیر"),
+
+    # District 7
+    "seyed-khandan": (7, "سیدخندان"),
+    "sohrevardi": (7, "سهروردی"),
+    "abbas-abad": (7, "عباس‌آباد"),
+    "motahari": (7, "مطهری"),
+    "nezam-abad": (7, "نظام‌آباد"),
+
+    # District 8
+    "narmak": (8, "نارمک"),
+    "tehran-now": (8, "تهران‌نو"),
+    "sabalan": (8, "سبلان"),
+    "vahidieh": (8, "وحیدیه"),
+
+    # District 9
+    "azadi": (9, "آزادی"),
+    "ostad-moein": (9, "استاد معین"),
+    "dr-hoshyar": (9, "دکتر هوشیار"),
+    "mehrabad-south": (9, "مهرآباد جنوبی"),
+
+    # District 10
+    "jeyhoun": (10, "جیحون"),
+    "selsebil": (10, "سلسبیل"),
+    "selsebil-shomali": (10, "سلسبیل"),
+    "beryank": (10, "بریانک"),
+    "karoon": (10, "کارون"),
+    "haft-chenar": (10, "هفت‌چنار"),
+    "dampezeshki": (10, "دامپزشکی"),
+    "azarbaijan": (10, "آذربایجان"),
+
+    # District 11
+    "moniriyeh": (11, "منیریه"),
+    "hassan-abad": (11, "حسن‌آباد"),
+    "sheykh-hadi": (11, "شیخ هادی"),
+    "enghelab": (11, "انقلاب"),
+
+    # District 12
+    "baharestan": (12, "بهارستان"),
+    "bazaar": (12, "بازار"),
+    "ferdows": (12, "فردوسی"),
+
+    # District 13
+    "piroozi": (13, "پیروزی"),
+    "nirou-havayi": (13, "نیروی هوایی"),
+
+    # District 14
+    "nabard": (14, "نبرد"),
+    "abouzar": (14, "ابوذر"),
+
+    # District 15
+    "afsariyeh": (15, "افسریه"),
+    "moshiriyeh": (15, "مشیریه"),
+    "kiyanshahr": (15, "کیانشهر"),
+
+    # District 16
+    "nazi-abad": (16, "نازی‌آباد"),
+    "javadiyeh": (16, "جوادیه"),
+    "yakhchi-abad": (16, "یاخچی‌آباد"),
+
+    # District 17
+    "fallah": (17, "فلاح"),
+    "azari": (17, "آذری"),
+
+    # District 18
+    "shadabad": (18, "شادآباد"),
+    "valiasr-town": (18, "شهرک ولیعصر"),
+    "yaftabad": (18, "یافت‌آباد"),
+
+    # District 19
+    "khani-abad": (19, "خانی‌آباد"),
+    "nemat-abad": (19, "نعمت‌آباد"),
+
+    # District 20
+    "shahr-e-rey": (20, "شهر ری"),
+    "dolat-abad": (20, "دولت‌آباد"),
+
+    # District 21
+    "tehransar": (21, "تهرانسر"),
+    "shahrak-e-azadi": (21, "شهرک آزادی"),
+
+    # District 22
+    "chitgar": (22, "چیتگر"),
+    "shahrak-e-golestan": (22, "شهرک گلستان"),
+    "dehkadeh-olympic": (22, "دهکده المپیک"),
+    "koohak": (22, "کوهک"),
+}
+
 # Reverse lookup for neighborhoods to district candidate
 _NEIGHBORHOOD_TO_DISTRICT: Dict[str, int] = {}
 for dist_id, data in TEHRAN_DISTRICTS.items():
@@ -248,13 +407,19 @@ for dist_id, data in TEHRAN_DISTRICTS.items():
 
 def suggest_district_for_neighborhood(neighborhood: Optional[str]) -> Optional[int]:
     """
-    Suggest a municipal district based on neighborhood name.
+    Suggest a municipal district based on neighborhood name or Divar slug.
     Does not strictly force an identity, returns None if ambiguous.
     """
     if not neighborhood:
         return None
 
-    clean_nh = neighborhood.strip()
+    clean_nh = str(neighborhood).strip().lower()
+
+    # Direct Divar slug lookup
+    if clean_nh in DIVAR_SLUG_TO_DISTRICT:
+        return DIVAR_SLUG_TO_DISTRICT[clean_nh][0]
+
+    # Persian name exact match
     if clean_nh in _NEIGHBORHOOD_TO_DISTRICT:
         return _NEIGHBORHOOD_TO_DISTRICT[clean_nh]
 
@@ -263,7 +428,23 @@ def suggest_district_for_neighborhood(neighborhood: Optional[str]) -> Optional[i
         if nh in clean_nh or clean_nh in nh:
             return dist
 
+    for slug, (dist, fa_name) in DIVAR_SLUG_TO_DISTRICT.items():
+        if slug in clean_nh or clean_nh in slug or fa_name in clean_nh:
+            return dist
+
     return None
+
+
+def suggest_neighborhood_display_name(slug_or_name: Optional[str]) -> str:
+    """
+    Convert a Divar neighborhood slug into a clean Persian display name.
+    """
+    if not slug_or_name:
+        return ""
+    clean = str(slug_or_name).strip().lower()
+    if clean in DIVAR_SLUG_TO_DISTRICT:
+        return DIVAR_SLUG_TO_DISTRICT[clean][1]
+    return str(slug_or_name).strip()
 
 
 def get_district_coordinates(district: int) -> Tuple[float, float]:
@@ -274,3 +455,17 @@ def get_district_coordinates(district: int) -> Tuple[float, float]:
         return TEHRAN_DISTRICTS[district]["center"]
     # Fallback to Tehran center
     return (35.6892, 51.3890)
+
+
+def get_district_by_coordinates(lat: float, lon: float) -> Optional[int]:
+    """
+    Determine the municipal district (1-22) from geographic coordinates.
+    """
+    if not lat or not lon:
+        return None
+    for dist_id, data in TEHRAN_DISTRICTS.items():
+        min_lat, max_lat = data["lat_range"]
+        min_lon, max_lon = data["lon_range"]
+        if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+            return dist_id
+    return None

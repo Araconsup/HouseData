@@ -158,38 +158,41 @@ class DivarApiClient:
 
         # Build official Divar finder payload
         # Note: city must always be tehran for our application
-        payload: Dict[str, Any] = {
-            "city": city.lower(),
-            "category": category,
-            "query": {},
-        }
+        from core.constants import CANONICAL_TO_DIVAR_CATEGORY
+        divar_cat = CANONICAL_TO_DIVAR_CATEGORY.get(category, category)
 
-        if district:
-            payload["query"]["district"] = district
-        if neighborhood:
-            payload["query"]["neighborhood"] = neighborhood
+        payload: Dict[str, Any] = {
+            "city": city.lower() or "tehran",
+        }
+        if divar_cat:
+            payload["category"] = divar_cat
+
+        query_dict = {}
         if min_area or max_area:
-            payload["query"]["size"] = {}
+            query_dict["size"] = {}
             if min_area:
-                payload["query"]["size"]["min"] = min_area
+                query_dict["size"]["min"] = min_area
             if max_area:
-                payload["query"]["size"]["max"] = max_area
+                query_dict["size"]["max"] = max_area
         if min_price or max_price:
-            payload["query"]["price"] = {}
+            query_dict["price"] = {}
             if min_price:
-                payload["query"]["price"]["min"] = min_price
+                query_dict["price"]["min"] = min_price
             if max_price:
-                payload["query"]["price"]["max"] = max_price
+                query_dict["price"]["max"] = max_price
         if min_rooms or max_rooms:
-            payload["query"]["rooms"] = {}
+            query_dict["rooms"] = {}
             if min_rooms:
-                payload["query"]["rooms"]["min"] = min_rooms
+                query_dict["rooms"]["min"] = min_rooms
             if max_rooms:
-                payload["query"]["rooms"]["max"] = max_rooms
+                query_dict["rooms"]["max"] = max_rooms
         if only_with_parking:
-            payload["query"]["parking"] = True
+            query_dict["parking"] = True
         if only_with_elevator:
-            payload["query"]["elevator"] = True
+            query_dict["elevator"] = True
+
+        if query_dict:
+            payload["query"] = query_dict
 
         start_t = time.time()
         http_status = None
