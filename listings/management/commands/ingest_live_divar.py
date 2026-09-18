@@ -52,7 +52,7 @@ class Command(BaseCommand):
                 posts = client.search_posts(city="tehran", category=cat)
                 self.stdout.write(self.style.SUCCESS(f"Divar returned {len(posts)} posts for {cat}"))
 
-                # Ingest listings with details
+                # Ingest listings directly from search results
                 cat_count = 0
                 for p in posts:
                     if total_ingested >= limit:
@@ -63,8 +63,7 @@ class Command(BaseCommand):
                         continue
 
                     try:
-                        detail = client.get_post_details(token)
-                        listing, is_new = ListingIngestionService.ingest_listing(detail)
+                        listing, is_new = ListingIngestionService.ingest_listing(p)
                         if listing:
                             total_ingested += 1
                             cat_count += 1
@@ -75,8 +74,6 @@ class Command(BaseCommand):
                             )
                     except Exception as exc:
                         self.stdout.write(self.style.WARNING(f"  ✗ Error on {token}: {exc}"))
-
-                    time.sleep(0.35)  # respectful rate limiting
 
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Error querying {cat}: {e}"))

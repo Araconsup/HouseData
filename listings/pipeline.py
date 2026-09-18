@@ -61,6 +61,7 @@ class ListingDataCleaner:
         """
         data = raw.get("data", {}) if isinstance(raw.get("data"), dict) else {}
         attrs = data.get("other_options_and_attributes", {}) if isinstance(data.get("other_options_and_attributes"), dict) else {}
+        re_fields = raw.get("real_estate_fields", {}) if isinstance(raw.get("real_estate_fields"), dict) else {}
 
         token = raw.get("token") or raw.get("divar_token")
         if not token:
@@ -81,7 +82,8 @@ class ListingDataCleaner:
 
         # Parse & normalize area
         raw_area = (
-            data.get("size")
+            re_fields.get("size")
+            or data.get("size")
             or attrs.get("size")
             or raw.get("area_m2")
             or raw.get("size")
@@ -111,8 +113,11 @@ class ListingDataCleaner:
 
         price = parse_iranian_price(raw_price)
 
-        raw_rent = data.get("rent") or attrs.get("rent") or raw.get("rent")
-        raw_deposit = (
+        rent_obj = re_fields.get("rent")
+        raw_rent = rent_obj.get("value") if isinstance(rent_obj, dict) else (data.get("rent") or attrs.get("rent") or raw.get("rent"))
+
+        deposit_obj = re_fields.get("credit")
+        raw_deposit = deposit_obj.get("value") if isinstance(deposit_obj, dict) else (
             data.get("deposit")
             or data.get("credit")
             or attrs.get("credit")
@@ -163,6 +168,9 @@ class ListingDataCleaner:
             if not district:
                 district = suggest_district_for_neighborhood(neighborhood)
 
+        if district is None and title:
+            district = suggest_district_for_neighborhood(title)
+
         # Coordinate normalization
         lat = data.get("latitude") or raw.get("latitude") or raw.get("lat")
         lon = data.get("longitude") or raw.get("longitude") or raw.get("long") or raw.get("lon")
@@ -179,7 +187,13 @@ class ListingDataCleaner:
             lat, lon = None, None
 
         # Building age normalization (support Solar Hijri years like 1397 -> 1405 - 1397 = 8)
-        raw_year = data.get("year") or attrs.get("year") or raw.get("building_age") or raw.get("age")
+        raw_year = (
+            re_fields.get("year")
+            or data.get("year")
+            or attrs.get("year")
+            or raw.get("building_age")
+            or raw.get("age")
+        )
         building_age = None
         if raw_year is not None:
             try:
@@ -192,7 +206,12 @@ class ListingDataCleaner:
                 building_age = None
 
         # Room count normalization (support Persian words 'یک', 'دو', 'سه' ...)
-        raw_rooms = attrs.get("rooms") or data.get("rooms") or raw.get("rooms")
+        raw_rooms = (
+            re_fields.get("rooms")
+            or attrs.get("rooms")
+            or data.get("rooms")
+            or raw.get("rooms")
+        )
         rooms = None
         if raw_rooms is not None:
             clean_r = str(raw_rooms).strip()
@@ -213,8 +232,17 @@ class ListingDataCleaner:
             except (ValueError, TypeError):
                 return None
 
-        floor = safe_int(attrs.get("floor") or data.get("floor") or raw.get("floor"))
-        total_floors = safe_int(attrs.get("floors_count") or data.get("total_floors") or raw.get("total_floors"))
+        floor = safe_int(
+            re_fields.get("floor")
+            or attrs.get("floor")
+            or data.get("floor")
+            or raw.get("floor")
+        )
+        total_floors = safe_int(
+            attrs.get("floors_count")
+            or data.get("total_floors")
+            or raw.get("total_floors")
+        )
 
         # Amenities
         def bool_val(v):
@@ -225,8 +253,16 @@ class ListingDataCleaner:
                 return v_clean in ("true", "1", "دارد", "yes")
             return False
 
-        parking = bool_val(data.get("parking") or attrs.get("parking") or raw.get("parking"))
-        elevator = bool_val(data.get("elevator") or attrs.get("elevator") or raw.get("elevator"))
+        parking = bool_val(
+            re_fields.get("has_parking")
+            if re_fields.get("has_parking") is not None
+            else (data.get("parking") or attrs.get("parking") or raw.get("parking"))
+        )
+        elevator = bool_val(
+            re_fields.get("has_elevator")
+            if re_fields.get("has_elevator") is not None
+            else (data.get("elevator") or attrs.get("elevator") or raw.get("elevator"))
+        )
         storage = bool_val(attrs.get("warehouse") or attrs.get("storage") or raw.get("storage"))
         balcony = bool_val(attrs.get("balcony") or data.get("balcony") or raw.get("balcony"))
 
