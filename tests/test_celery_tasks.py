@@ -15,7 +15,8 @@ from listings.models import DivarListing
 
 
 @pytest.mark.django_db
-def test_collect_partition_task():
+def test_collect_partition_task(settings):
+    settings.MOCK_DIVAR_API = True
     partition = SearchPartition.objects.create(
         name="پارتیشن تست منطقه ۲",
         category=CATEGORY_APARTMENT_SALE,

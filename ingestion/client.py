@@ -84,7 +84,7 @@ class DivarApiClient:
     _last_request_time = 0.0
 
     def __init__(self, api_key: Optional[str] = None, timeout: int = 15):
-        self.api_key = api_key or getattr(settings, "DIVAR_API_KEY", "")
+        self.api_key = api_key if api_key is not None else getattr(settings, "DIVAR_API_KEY", "")
         self.timeout = timeout
         self.min_request_interval = getattr(settings, "DIVAR_REQUEST_INTERVAL_SEC", 0.5)
         self.daily_quota = getattr(settings, "DIVAR_DAILY_REQUEST_LIMIT", 5000)
