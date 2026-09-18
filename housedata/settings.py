@@ -155,5 +155,5 @@ CELERY_TIMEZONE = TIME_ZONE
 DIVAR_API_KEY = os.getenv("DIVAR_API_KEY", "")
 # Automatically enable mock mode when no API key is set for zero-friction local development & testing
 MOCK_DIVAR_API = os.getenv("MOCK_DIVAR_API", "").lower() in ("true", "1") or not DIVAR_API_KEY
-DIVAR_REQUEST_INTERVAL_SEC = float(os.getenv("DIVAR_REQUEST_INTERVAL_SEC", "0.5"))
+DIVAR_REQUEST_INTERVAL_SEC = float(os.getenv("DIVAR_REQUEST_INTERVAL_SEC", "1.5"))
 DIVAR_DAILY_REQUEST_LIMIT = int(os.getenv("DIVAR_DAILY_REQUEST_LIMIT", "5000"))

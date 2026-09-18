@@ -110,3 +110,28 @@ def test_client_retry_and_circuit_breaker(mock_post, mock_sleep):
     # Third call should immediately raise DivarCircuitBreakerOpenError without network call
     with pytest.raises(DivarCircuitBreakerOpenError):
         client.search_posts(city="tehran", category="apartment-sale")
+
+
+@pytest.mark.django_db
+@patch("time.sleep")
+@patch("requests.post")
+def test_client_429_rate_limit_retry_and_backoff(mock_post, mock_sleep):
+    # First returns 429 with Retry-After: 3, then succeeds with 200
+    resp_429 = MagicMock()
+    resp_429.status_code = 429
+    resp_429.headers = {"Retry-After": "3"}
+
+    resp_200 = MagicMock()
+    resp_200.status_code = 200
+    resp_200.headers = {}
+    resp_200.json.return_value = {"posts": [{"token": "post_after_retry", "title": "ملک بعد از انتظار"}]}
+
+    mock_post.side_effect = [resp_429, resp_200]
+
+    client = DivarApiClient(api_key="test-api-key")
+    client.mock_mode = False
+
+    posts = client.search_posts(city="tehran", category="apartment-sale")
+    assert len(posts) == 1
+    assert posts[0]["token"] == "post_after_retry"
+    mock_sleep.assert_any_call(3)

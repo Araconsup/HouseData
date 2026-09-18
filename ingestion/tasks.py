@@ -47,16 +47,6 @@ def collect_partition(self, partition_id: int):
         duplicate_count = 0
 
         for post in posts:
-            post_token = post.get("token")
-            # If in live Divar mode, enrich with full details (exact size, price, year, rooms, coordinates)
-            if not client.mock_mode and post_token:
-                try:
-                    full_details = client.get_post_details(post_token)
-                    if full_details and isinstance(full_details, dict):
-                        post = full_details
-                except Exception as e:
-                    logger.debug(f"Detail fetch error for {post_token}: {e}")
-
             _, is_new = ListingIngestionService.ingest_listing(post, partition=partition)
             if is_new:
                 new_count += 1

@@ -28,6 +28,11 @@ class DivarQuotaExceededError(DivarApiError):
     pass
 
 
+class DivarRateLimitError(DivarApiError):
+    """Raised when Divar API rate limit (HTTP 429) is encountered and retries exhausted."""
+    pass
+
+
 class DivarCircuitBreakerOpenError(DivarApiError):
     """Raised when circuit breaker is tripped due to consecutive failures."""
     pass
@@ -86,7 +91,7 @@ class DivarApiClient:
     def __init__(self, api_key: Optional[str] = None, timeout: int = 15):
         self.api_key = api_key if api_key is not None else getattr(settings, "DIVAR_API_KEY", "")
         self.timeout = timeout
-        self.min_request_interval = getattr(settings, "DIVAR_REQUEST_INTERVAL_SEC", 0.5)
+        self.min_request_interval = getattr(settings, "DIVAR_REQUEST_INTERVAL_SEC", 1.5)
         self.daily_quota = getattr(settings, "DIVAR_DAILY_REQUEST_LIMIT", 5000)
         self.mock_mode = getattr(settings, "MOCK_DIVAR_API", False) or not self.api_key
 
@@ -230,7 +235,21 @@ class DivarApiClient:
                     )
                     return posts
 
-                # 4xx client errors should not retry
+                # Handle 429 Too Many Requests with exponential backoff & Retry-After
+                if response.status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    try:
+                        wait_sec = int(retry_after) if retry_after else (2 ** (attempt + 1) * 2)
+                    except (ValueError, TypeError):
+                        wait_sec = 2 ** (attempt + 1) * 2
+                    logger.warning(
+                        f"Divar API rate limit reached (HTTP 429) on {self.SEARCH_ENDPOINT}. "
+                        f"Backing off for {wait_sec}s before retry (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(wait_sec)
+                    continue
+
+                # 4xx client errors should not retry (except 429 handled above)
                 if 400 <= response.status_code < 500:
                     error_msg = f"Client error {response.status_code}: {response.text[:200]}"
                     self._circuit_breaker.record_failure()
@@ -284,29 +303,54 @@ class DivarApiClient:
         error_msg = ""
         request_id = ""
 
-        try:
-            response = requests.get(url, headers=headers, timeout=self.timeout)
-            http_status = response.status_code
-            request_id = response.headers.get("x-request-id", "")
+        max_retries = 3
+        last_exception = None
 
-            if response.status_code == 200:
-                self._circuit_breaker.record_success()
-                data = response.json()
-                self._log_request(
-                    endpoint=url,
-                    partition_id=None,
-                    http_status=http_status,
-                    duration_ms=int((time.time() - start_t) * 1000),
-                    results_count=1,
-                    request_id=request_id,
-                )
-                return data
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, headers=headers, timeout=self.timeout)
+                http_status = response.status_code
+                request_id = response.headers.get("x-request-id", "")
 
-            error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
-            self._circuit_breaker.record_failure()
-        except requests.RequestException as exc:
-            error_msg = str(exc)
-            self._circuit_breaker.record_failure()
+                if response.status_code == 200:
+                    self._circuit_breaker.record_success()
+                    data = response.json()
+                    self._log_request(
+                        endpoint=url,
+                        partition_id=None,
+                        http_status=http_status,
+                        duration_ms=int((time.time() - start_t) * 1000),
+                        results_count=1,
+                        request_id=request_id,
+                    )
+                    return data
+
+                # Handle 429 Too Many Requests
+                if response.status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    try:
+                        wait_sec = int(retry_after) if retry_after else (2 ** (attempt + 1) * 2)
+                    except (ValueError, TypeError):
+                        wait_sec = 2 ** (attempt + 1) * 2
+                    logger.warning(
+                        f"Divar API rate limit reached (HTTP 429) on {url}. "
+                        f"Backing off for {wait_sec}s before retry (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(wait_sec)
+                    continue
+
+                if 400 <= response.status_code < 500:
+                    error_msg = f"Client error {response.status_code}: {response.text[:200]}"
+                    self._circuit_breaker.record_failure()
+                    break
+
+                error_msg = f"Server error {response.status_code}: {response.text[:200]}"
+                time.sleep(2 ** attempt)
+
+            except requests.RequestException as exc:
+                last_exception = exc
+                error_msg = str(exc)
+                time.sleep(2 ** attempt)
 
         duration_ms = int((time.time() - start_t) * 1000)
         self._log_request(
