@@ -633,8 +633,24 @@ a {
 }
 
 @media (max-width: 768px) {
+  .header-container {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
   .nav-links {
-    display: none; /* Can toggle or collapse on mobile */
+    display: flex;
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 0.35rem;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+  .nav-link {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.82rem;
+  }
+  .header-status {
+    display: none;
   }
   .grid-2 {
     grid-template-columns: 1fr;
