@@ -18,6 +18,6 @@ echo Applying database migrations...
 echo.
 echo Starting web server on http://localhost:8080/ ...
 start http://localhost:8080/
-.venv\Scripts\python.exe manage.py runserver 8080
+.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8080
 
 pause
