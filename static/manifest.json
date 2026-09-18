@@ -1,0 +1,32 @@
+{
+  "name": "HOUSEDATA - سامانه تحلیل هوشمند املاک تهران",
+  "short_name": "HOUSEDATA",
+  "description": "سامانه پایش، تحلیل آماری و تشخیص ناهنجاری املاک تهران بر پایه داده‌های رسمی دیوار",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#06b6d4",
+  "orientation": "any",
+  "dir": "rtl",
+  "lang": "fa",
+  "icons": [
+    {
+      "src": "/static/img/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "finance", "utilities"]
+}

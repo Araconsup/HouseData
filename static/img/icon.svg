@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="15" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="#0b0f17"/>
+  <rect x="24" y="24" width="464" height="464" rx="88" fill="url(#grad)" filter="url(#glow)"/>
+  <path d="M256 100 L380 210 L380 390 L132 390 L132 210 Z" fill="#0b0f17" opacity="0.92"/>
+  <path d="M256 128 L354 218 L354 366 L158 366 L158 218 Z" fill="#121824"/>
+  <!-- Modern Building grid / data graph -->
+  <rect x="186" y="246" width="36" height="36" rx="6" fill="#06b6d4"/>
+  <rect x="238" y="246" width="36" height="36" rx="6" fill="#3b82f6"/>
+  <rect x="290" y="246" width="36" height="36" rx="6" fill="#06b6d4"/>
+  <rect x="186" y="298" width="36" height="36" rx="6" fill="#3b82f6"/>
+  <rect x="238" y="298" width="36" height="36" rx="6" fill="#10b981"/>
+  <rect x="290" y="298" width="36" height="36" rx="6" fill="#3b82f6"/>
+  <!-- Letter H stylized -->
+  <path d="M220 180 L240 180 L240 214 L272 214 L272 180 L292 180 L292 234 L272 234 L272 222 L240 222 L240 234 L220 234 Z" fill="#ffffff"/>
+</svg>
