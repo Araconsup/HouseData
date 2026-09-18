@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">فهرست و کاوشگر املاک تهران</h1>
+    <p class="page-desc">مشاهده، جستجو و فیلتر آگهی‌های ثبت‌شده در پایگاه داده پایشگر دیوار</p>
+  </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="filter-bar">
+  <div class="form-group" style="min-width: 220px; flex: 2;">
+    <label class="form-label">جستجوی متن، محله یا عنوان</label>
+    <input type="text" id="search-input" class="form-control" placeholder="مثال: سعادت‌آباد، خوش‌نقشه، نیاوران...">
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">منطقه شهرداری</label>
+    <select id="filter-district" class="form-select">
+      <option value="">همه مناطق</option>
+      {% for dist_num, dist in districts.items %}
+        <option value="{{ dist_num }}">{{ dist.name_fa }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">رده معامله</label>
+    <select id="filter-category" class="form-select">
+      <option value="">همه انواع</option>
+      {% for cat_val, cat_label in categories %}
+        <option value="{{ cat_val }}">{{ cat_label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">حداقل متراژ</label>
+    <input type="number" id="filter-min-area" class="form-control" placeholder="متر">
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">حداکثر متراژ</label>
+    <input type="number" id="filter-max-area" class="form-control" placeholder="متر">
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">اتاق خواب</label>
+    <select id="filter-rooms" class="form-select">
+      <option value="">همه</option>
+      <option value="1">۱ خواب</option>
+      <option value="2">۲ خواب</option>
+      <option value="3">۳ خواب</option>
+      <option value="4">۴ خواب و بیشتر</option>
+    </select>
+  </div>
+
+  <div class="form-group" style="flex: 0 0 auto; align-self: flex-end; padding-bottom: 0.5rem;">
+    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; cursor:pointer;">
+      <input type="checkbox" id="filter-anomaly">
+      <span style="color:var(--accent-rose); font-weight:600;">فقط موارد نامتعارف</span>
+    </label>
+  </div>
+
+  <div style="display:flex; gap:0.5rem; align-self: flex-end;">
+    <button id="btn-search" class="btn btn-primary">جستجو</button>
+    <button id="btn-reset" class="btn btn-secondary">پاک‌کردن</button>
+  </div>
+</div>
+
+<!-- Results Header Summary -->
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+  <div style="font-size:0.95rem; color:var(--text-secondary);">
+    یافته‌ها: <strong id="total-results-count" style="color:#fff;">۰</strong> آگهی مشاهده‌شده در پایگاه داده
+  </div>
+  <div id="loading-spinner" style="display:none; color:var(--accent-cyan); font-size:0.85rem;">
+    در حال بارگذاری اطلاعات...
+  </div>
+</div>
+
+<!-- Listings Cards Grid -->
+<div id="listings-container" class="grid-3">
+  <!-- Dynamic listing cards will be populated here -->
+</div>
+
+<!-- Pagination Controls -->
+<div id="pagination-controls" style="display:flex; justify-content:center; align-items:center; gap:1rem; margin-top:2.5rem;">
+  <button id="btn-prev-page" class="btn btn-secondary" disabled>صفحه قبل</button>
+  <span id="page-indicator" style="font-size:0.9rem; color:var(--text-secondary);">صفحه ۱</span>
+  <button id="btn-next-page" class="btn btn-secondary" disabled>صفحه بعد</button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let currentNextUrl = null;
+let currentPrevUrl = null;
+
+async function fetchListings(page = 1) {
+  const container = document.getElementById('listings-container');
+  const spinner = document.getElementById('loading-spinner');
+  spinner.style.display = 'block';
+
+  const params = new URLSearchParams();
+  params.set('page', page);
+
+  const search = document.getElementById('search-input').value.trim();
+  if (search) params.set('search', search);
+
+  const district = document.getElementById('filter-district').value;
+  if (district) params.set('district', district);
+
+  const category = document.getElementById('filter-category').value;
+  if (category) params.set('category', category);
+
+  const minArea = document.getElementById('filter-min-area').value;
+  if (minArea) params.set('min_area', minArea);
+
+  const maxArea = document.getElementById('filter-max-area').value;
+  if (maxArea) params.set('max_area', maxArea);
+
+  const rooms = document.getElementById('filter-rooms').value;
+  if (rooms) params.set('rooms', rooms);
+
+  const isAnomaly = document.getElementById('filter-anomaly').checked;
+  if (isAnomaly) params.set('is_anomaly', 'true');
+
+  try {
+    const res = await fetch(`/api/listings/?${params.toString()}`);
+    const data = await res.json();
+
+    document.getElementById('total-results-count').innerText = toPersianDigits(data.count.toLocaleString());
+
+    currentNextUrl = data.next;
+    currentPrevUrl = data.previous;
+    currentPage = page;
+
+    document.getElementById('page-indicator').innerText = `صفحه ${toPersianDigits(currentPage)}`;
+    document.getElementById('btn-prev-page').disabled = !currentPrevUrl;
+    document.getElementById('btn-next-page').disabled = !currentNextUrl;
+
+    renderListingCards(data.results);
+  } catch (err) {
+    console.error('Error fetching listings:', err);
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function renderListingCards(listings) {
+  const container = document.getElementById('listings-container');
+  container.innerHTML = '';
+
+  if (!listings || listings.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);">
+        هیچ آگهی با فیلترهای مشخص‌شده یافت نشد.
+      </div>
+    `;
+    return;
+  }
+
+  listings.forEach(item => {
+    const isAnomaly = item.is_anomaly;
+    const card = document.createElement('div');
+    card.className = `listing-card ${isAnomaly ? 'anomaly-highlight' : ''}`;
+
+    const distLabel = item.district ? `منطقه ${toPersianDigits(item.district)}` : 'تهران';
+    const nhLabel = item.neighborhood ? ` • ${item.neighborhood}` : '';
+
+    let priceHtml = '';
+    if (item.price) {
+      priceHtml = `
+        <div class="listing-price-row">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">قیمت کل</div>
+            <div class="price-main">${item.price_formatted}</div>
+          </div>
+          <div style="text-align:left;">
+            <div style="font-size:0.75rem; color:var(--text-muted);">هر متر مربع</div>
+            <div class="price-sqm">${item.price_per_m2_formatted}</div>
+          </div>
+        </div>
+      `;
+    } else {
+      priceHtml = `
+        <div class="listing-price-row">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">ودیعه</div>
+            <div class="price-main">${item.deposit_formatted || 'توافقی'}</div>
+          </div>
+          <div style="text-align:left;">
+            <div style="font-size:0.75rem; color:var(--text-muted);">اجاره ماهیانه</div>
+            <div class="price-sqm">${item.rent_formatted || '—'}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    let anomalyBadge = '';
+    if (isAnomaly) {
+      const dev = item.anomaly_score ? (item.anomaly_score > 0 ? `+${item.anomaly_score}%` : `${item.anomaly_score}%`) : '';
+      anomalyBadge = `
+        <div style="margin-top:0.5rem; margin-bottom:0.75rem;">
+          <span class="badge-anomaly">
+            <span>⚠️ نامتعارف آماری (${toPersianDigits(dev)})</span>
+          </span>
+        </div>
+      `;
+    }
+
+    card.innerHTML = `
+      <div>
+        <div class="listing-header">
+          <h3 class="listing-title">${item.title}</h3>
+          <span class="listing-district-tag">${distLabel}${nhLabel}</span>
+        </div>
+
+        ${priceHtml}
+        ${anomalyBadge}
+
+        <div class="listing-specs">
+          <div class="spec-item">📐 ${toPersianDigits(Math.round(item.area_m2 || 0))} متر</div>
+          <div class="spec-item">🛏️ ${toPersianDigits(item.rooms ?? '—')} خواب</div>
+          <div class="spec-item">🏢 طبقه ${toPersianDigits(item.floor ?? '—')}</div>
+          <div class="spec-item">🚗 ${item.parking ? 'پارکینگ' : 'بدون پارکینگ'}</div>
+          <div class="spec-item">🛗 ${item.elevator ? 'آسانسور' : 'بدون آسانسور'}</div>
+          <div class="spec-item">📦 ${item.storage ? 'انباری' : 'بدون انباری'}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:1rem; pt-2; border-top:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:0.75rem; color:var(--text-muted);">توکن: ${item.divar_token.slice(-8)}</span>
+        <a href="/listings/${item.divar_token}/" class="btn btn-secondary" style="padding:0.35rem 0.8rem; font-size:0.8rem;">
+          مشاهده تحلیل و همتایان ←
+        </a>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  fetchListings(1);
+
+  document.getElementById('btn-search').addEventListener('click', () => fetchListings(1));
+  document.getElementById('search-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') fetchListings(1);
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('search-input').value = '';
+    document.getElementById('filter-district').value = '';
+    document.getElementById('filter-category').value = '';
+    document.getElementById('filter-min-area').value = '';
+    document.getElementById('filter-max-area').value = '';
+    document.getElementById('filter-rooms').value = '';
+    document.getElementById('filter-anomaly').checked = false;
+    fetchListings(1);
+  });
+
+  document.getElementById('btn-prev-page').addEventListener('click', () => {
+    if (currentPage > 1) fetchListings(currentPage - 1);
+  });
+
+  document.getElementById('btn-next-page').addEventListener('click', () => {
+    fetchListings(currentPage + 1);
+  });
+});
+</script>
+{% endblock %}

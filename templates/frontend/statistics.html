@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">شاخص‌های جامع آماری بازار مسکن تهران</h1>
+    <p class="page-desc">
+      محاسبه آماره‌های توصیفی، میانه، انحراف معیار و صدک‌های قیمتی بر پایه داده‌های مشاهداتی
+    </p>
+  </div>
+  <div style="display:flex; gap:0.5rem;">
+    <button id="btn-type-sale" class="btn btn-primary" onclick="switchType('sale')">خرید و فروش</button>
+    <button id="btn-type-rent" class="btn btn-secondary" onclick="switchType('rent')">رهن و اجاره</button>
+  </div>
+</div>
+
+<!-- District Statistics Table -->
+<div class="card" style="margin-bottom:2rem;">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">جدول مقایسه‌ای مناطق ۲۲‌گانه شهر تهران</h3>
+      <p class="card-subtitle">شاخص‌های قیمتی بر حسب تومان به ازای هر متر مربع</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>منطقه</th>
+          <th>تعداد آگهی</th>
+          <th>میانه قیمت/متر (P50)</th>
+          <th>میانگین</th>
+          <th>چارک اول (P25)</th>
+          <th>چارک سوم (P75)</th>
+          <th>انحراف چارکی (IQR)</th>
+          <th>انحراف مطلق میانه (MAD)</th>
+          <th>کمترین / بیشترین</th>
+        </tr>
+      </thead>
+      <tbody id="stats-table-body">
+        <!-- Populated dynamically via JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Tehran Price Ranking Chart -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">رتبه‌بندی میانه قیمت هر متر مربع در مناطق تهران</h3>
+  </div>
+  <div style="height: 380px; position: relative;">
+    <canvas id="chart-stats-ranking"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentType = 'sale';
+let rankingChart = null;
+
+async function loadDistrictStats(type = 'sale') {
+  currentType = type;
+  try {
+    const res = await fetch(`/api/statistics/districts/?type=${type}`);
+    const data = await res.json();
+    const districts = data.districts || [];
+
+    const tbody = document.getElementById('stats-table-body');
+    tbody.innerHTML = '';
+
+    if (districts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:2rem; color:var(--text-muted);">اطلاعات آماری هنوز محاسبه نشده است.</td></tr>';
+      return;
+    }
+
+    const chartLabels = [];
+    const chartValues = [];
+
+    districts.forEach(d => {
+      const p25 = d.q1_price_per_m2 ? Math.round(d.q1_price_per_m2 / 1_000_000) : 0;
+      const p75 = d.q3_price_per_m2 ? Math.round(d.q3_price_per_m2 / 1_000_000) : 0;
+      const iqr = (p75 && p25) ? (p75 - p25) : 0;
+      const mad = d.mad ? Math.round(d.mad / 1_000_000) : 0;
+      const minSqm = d.min_price_per_m2 ? Math.round(d.min_price_per_m2 / 1_000_000) : 0;
+      const maxSqm = d.max_price_per_m2 ? Math.round(d.max_price_per_m2 / 1_000_000) : 0;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-weight:700;">${d.dimension_label_fa || d.dimension_value}</td>
+        <td>${toPersianDigits(d.listing_count)}</td>
+        <td style="color:var(--accent-cyan); font-weight:700;">${d.median_price_per_m2_formatted || '—'}</td>
+        <td>${d.mean_price_per_m2 ? formatToman(d.mean_price_per_m2) : '—'}</td>
+        <td>${toPersianDigits(p25)} م</td>
+        <td>${toPersianDigits(p75)} م</td>
+        <td>${toPersianDigits(iqr)} م</td>
+        <td>${toPersianDigits(mad)} م</td>
+        <td style="font-size:0.8rem; color:var(--text-muted);">${toPersianDigits(minSqm)} تا ${toPersianDigits(maxSqm)} م</td>
+      `;
+      tbody.appendChild(tr);
+
+      if (d.median_price_per_m2) {
+        chartLabels.push(d.dimension_label_fa.replace('منطقه ', 'منطقه '));
+        chartValues.push(Math.round(d.median_price_per_m2 / 1_000_000));
+      }
+    });
+
+    renderRankingChart(chartLabels, chartValues);
+
+  } catch (err) {
+    console.error('Error loading statistics:', err);
+  }
+}
+
+function renderRankingChart(labels, values) {
+  const ctx = document.getElementById('chart-stats-ranking').getContext('2d');
+  if (rankingChart) rankingChart.destroy();
+
+  rankingChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels.map(l => toPersianDigits(l)),
+      datasets: [{
+        label: 'میانه قیمت هر متر مربع (میلیون تومان)',
+        data: values,
+        backgroundColor: 'rgba(6, 182, 212, 0.7)',
+        borderColor: '#06b6d4',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          ticks: { callback: val => toPersianDigits(val) + ' م' }
+        }
+      }
+    }
+  });
+}
+
+function switchType(type) {
+  const btnSale = document.getElementById('btn-type-sale');
+  const btnRent = document.getElementById('btn-type-rent');
+
+  if (type === 'sale') {
+    btnSale.className = 'btn btn-primary';
+    btnRent.className = 'btn btn-secondary';
+  } else {
+    btnSale.className = 'btn btn-secondary';
+    btnRent.className = 'btn btn-primary';
+  }
+  loadDistrictStats(type);
+}
+
+document.addEventListener('DOMContentLoaded', () => loadDistrictStats('sale'));
+</script>
+{% endblock %}

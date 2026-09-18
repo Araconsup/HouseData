@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">مدیریت جمع‌آوری داده و پوشش API دیوار</h1>
+    <p class="page-desc">
+      پایش بودجه درخواست‌های روزانه، وضعیت قطعه‌بندی جستجو (Search Partitions) و ماتریس پوشش مناطق
+    </p>
+  </div>
+  <div style="display:flex; gap:0.5rem;">
+    <button id="btn-generate-partitions" class="btn btn-secondary">
+      + ایجاد قطعه‌های استاندارد تهران
+    </button>
+    <a href="/admin/ingestion/searchpartition/" target="_blank" class="btn btn-primary">
+      مدیریت پیشرفته در پنل ادمین ↗
+    </a>
+  </div>
+</div>
+
+<!-- API Accounting KPI Row -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-title">وضعیت اتصال به API رسمی دیوار</div>
+    <div class="kpi-value rtl-text" id="api-mode-label" style="font-size:1.3rem; color:var(--accent-cyan);">—</div>
+    <div class="kpi-sub" id="api-mode-sub">
+      <span>محیط اجرای درخواست‌ها</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">درخواست‌های امروز / سقف روزانه</div>
+    <div class="kpi-value rtl-text" id="api-quota-label" style="font-size:1.4rem;">—</div>
+    <div class="kpi-sub positive" id="api-quota-sub">
+      <span>مدیریت هوشمند سهمیه API</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">درخواست‌های موفق (HTTP 200)</div>
+    <div class="kpi-value rtl-text" id="api-success-count" style="color:var(--accent-emerald);">—</div>
+    <div class="kpi-sub positive">
+      <span>بدون خطای شبکه یا سرور</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">درخواست‌های ناموفق</div>
+    <div class="kpi-value rtl-text" id="api-failed-count" style="color:var(--accent-rose);">—</div>
+    <div class="kpi-sub">
+      <span>خطاهای ۴xx یا ۵xx ثبت‌شده</span>
+    </div>
+  </div>
+</div>
+
+<!-- Visual Collection Matrix Card -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">ماتریس پوشش جمع‌آوری داده به تفکیک مناطق و رده‌ها</h3>
+      <p class="card-subtitle">
+        این ماتریس وضعیت قطعه‌های جستجوی اجراشده را نشان می‌دهد و ادعای دریافت همه آگهی‌های دیوار نیست.
+      </p>
+    </div>
+    <div style="display:flex; gap:1rem; font-size:0.8rem; align-items:center;">
+      <span style="display:flex; align-items:center; gap:0.35rem;">
+        <span class="matrix-cell matrix-covered" style="min-width:auto; padding:2px 8px;">✓ پوشش کامل</span>
+      </span>
+      <span style="display:flex; align-items:center; gap:0.35rem;">
+        <span class="matrix-cell matrix-partial" style="min-width:auto; padding:2px 8px;">~ نیمه‌کامل</span>
+      </span>
+      <span style="display:flex; align-items:center; gap:0.35rem;">
+        <span class="matrix-cell matrix-pending" style="min-width:auto; padding:2px 8px;">— در انتظار</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>منطقه شهرداری</th>
+          <th style="text-align:center;">فروش آپارتمان</th>
+          <th style="text-align:center;">فروش خانه و ویلا</th>
+          <th style="text-align:center;">فروش زمین و کلنگی</th>
+          <th style="text-align:center;">رهن و اجاره آپارتمان</th>
+        </tr>
+      </thead>
+      <tbody id="matrix-table-body">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- API Request Logs Table -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">لاگ درخواست‌های اخیر به API رسمی دیوار (Audit Trail)</h3>
+      <p class="card-subtitle">ثبت دقیق زمان، زمان پاسخ‌دهی و کد شناسه درخواست جهت ممیزی و امنیت</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>زمان درخواست</th>
+          <th>اندپوینت (Endpoint)</th>
+          <th>کد پاسخ HTTP</th>
+          <th>مدت زمان (میلی‌ثانیه)</th>
+          <th>تعداد نتایج برگشتی</th>
+          <th>شناسه درخواست (Request ID)</th>
+        </tr>
+      </thead>
+      <tbody id="logs-table-body">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadCollectionStatus() {
+  try {
+    const res = await fetch('/api/collection/status/');
+    const data = await res.json();
+
+    const api = data.api;
+    const modeLabel = api.mock_mode ? 'حالت آزمایشی (Mock Generator)' : 'کنار دیوار رسمی (Divar Kenar)';
+    document.getElementById('api-mode-label').innerText = modeLabel;
+    document.getElementById('api-mode-sub').innerText = api.mock_mode ? 'بدون مصرف سهمیه تجاری' : 'کلید رسمی فعال';
+
+    document.getElementById('api-quota-label').innerText = `${toPersianDigits(api.requests_used_today)} / ${toPersianDigits(api.daily_limit)}`;
+    document.getElementById('api-success-count').innerText = toPersianDigits(api.successful_requests);
+    document.getElementById('api-failed-count').innerText = toPersianDigits(api.failed_requests);
+
+    renderMatrix(data.coverage_matrix);
+    loadLogs();
+  } catch (err) {
+    console.error('Error loading collection status:', err);
+  }
+}
+
+function renderMatrix(matrix) {
+  const tbody = document.getElementById('matrix-table-body');
+  tbody.innerHTML = '';
+
+  const rows = matrix.rows || [];
+  const categories = matrix.categories || [];
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    let cellsHtml = `<td style="font-weight:700;">منطقه ${toPersianDigits(r.district)} (${r.district_name_fa.replace('منطقه ' + r.district, '').trim() || r.district_name_fa})</td>`;
+
+    categories.forEach(cat => {
+      const cell = r.cells[cat] || { status: 'pending', unique_count: 0, efficiency: 0 };
+      let badgeClass = 'matrix-pending';
+      let icon = '—';
+
+      if (cell.status === 'covered') {
+        badgeClass = 'matrix-covered';
+        icon = '✓';
+      } else if (cell.status === 'partial') {
+        badgeClass = 'matrix-partial';
+        icon = '~';
+      }
+
+      cellsHtml += `
+        <td style="text-align:center;">
+          <span class="matrix-cell ${badgeClass}">
+            ${icon} ${toPersianDigits(cell.unique_count)} ملک
+            <span style="display:block; font-size:0.7rem; opacity:0.8;">کارایی: ${toPersianDigits(cell.efficiency)}٪</span>
+          </span>
+        </td>
+      `;
+    });
+
+    tr.innerHTML = cellsHtml;
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadLogs() {
+  try {
+    const res = await fetch('/api/collection/logs/');
+    const logs = await res.json();
+    const tbody = document.getElementById('logs-table-body');
+    tbody.innerHTML = '';
+
+    if (logs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-muted);">لاگی ثبت نشده است.</td></tr>';
+      return;
+    }
+
+    logs.slice(0, 15).forEach(l => {
+      const tr = document.createElement('tr');
+      const isOk = l.http_status === 200;
+      tr.innerHTML = `
+        <td style="font-size:0.8rem;">${new Date(l.request_time).toLocaleTimeString('fa-IR')}</td>
+        <td style="font-family:monospace; font-size:0.78rem; color:var(--accent-cyan); direction:ltr; text-align:right;">${l.endpoint.replace('https://open-api.divar.ir', '')}</td>
+        <td><span style="color:${isOk ? 'var(--accent-emerald)' : 'var(--accent-rose)'}; font-weight:700;">${l.http_status || 'ERR'}</span></td>
+        <td>${toPersianDigits(l.response_time_ms)} ms</td>
+        <td style="font-weight:700;">${toPersianDigits(l.number_of_results)}</td>
+        <td style="font-family:monospace; font-size:0.75rem; color:var(--text-muted);">${l.request_id || '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error('Error loading logs:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadCollectionStatus();
+
+  document.getElementById('btn-generate-partitions').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/collection/partitions/generate-standard/', { method: 'POST' });
+      const data = await res.json();
+      alert(`قطعه‌های استاندارد تهران ایجاد شدند: ${data.partitions_created} قطعه جدید اضافه شد.`);
+      loadCollectionStatus();
+    } catch (e) {
+      alert('خطا در ایجاد قطعه‌ها');
+    }
+  });
+});
+</script>
+{% endblock %}

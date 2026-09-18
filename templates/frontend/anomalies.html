@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">
+      <span>کاوشگر املاک نامتعارف آماری (Anomaly Explorer)</span>
+    </h1>
+    <p class="page-desc">
+      شناسایی آگهی‌های دارای فاصله و رفتار نامتعارف نسبت به املاک همتا بر مبنای مدل‌های ۴ گانه داده‌کاوی
+    </p>
+  </div>
+</div>
+
+<!-- Ethical & Scientific Guideline Banner -->
+<div style="background:rgba(244, 63, 94, 0.08); border:1px solid rgba(244, 63, 94, 0.3); border-radius:var(--radius); padding:1rem 1.25rem; margin-bottom:1.5rem; font-size:0.85rem; color:#fecdd3; line-height:1.7;">
+  <strong>توجه علمی و اخلاقی:</strong> «نامتعارف بودن آماری» صرفاً به معنای فاصله ویژگی‌های قیمت یا مشخصات ملک از رفتار معمول جامعه همتایان محلی است. سامانه <strong>HOUSEDATA</strong> هرگز ادعای «فرصت استثنایی خرید»، «معامله زیر قیمت قطعی»، «کلاهبرداری» یا «اشتباه آگهی‌دهنده» نمی‌کند و نتایج صرفاً ارزیابی آماری است. همچنین مواردی با حجم نمونه کمتر از ۱۵ ملک به عنوان «داده ناکافی» تفکیک می‌شوند.
+</div>
+
+<!-- Filters Bar -->
+<div class="filter-bar">
+  <div class="form-group">
+    <label class="form-label">منطقه شهرداری</label>
+    <select id="filter-district" class="form-select">
+      <option value="">همه مناطق</option>
+      {% for dist_num, dist in districts.items %}
+        <option value="{{ dist_num }}">{{ dist.name_fa }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">روش شناسایی (Detector)</label>
+    <select id="filter-detector" class="form-select">
+      <option value="">همه مدل‌ها</option>
+      <option value="ensemble">مدل تجمیعی (Ensemble)</option>
+      <option value="iqr">دامنه بین چارکی (IQR)</option>
+      <option value="robust_zscore">زد-اسکور مقاوم (MAD)</option>
+      <option value="isolation_forest">جنگل ایزولاسیون (Isolation Forest)</option>
+      <option value="comparable_deviation">انحراف از میانه محلی</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">سطح اطمینان آماری</label>
+    <select id="filter-confidence" class="form-select">
+      <option value="">همه سطوح</option>
+      {% for conf_val, conf_label in confidence_choices %}
+        <option value="{{ conf_val }}">{{ conf_label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">مرتب‌سازی بر اساس</label>
+    <select id="filter-ordering" class="form-select">
+      <option value="-score">بیشترین انحراف مثبت (گران‌تر از میانه)</option>
+      <option value="score">بیشترین انحراف منفی (ارزان‌تر از میانه)</option>
+      <option value="-sample_size">بزرگ‌ترین حجم نمونه همتا</option>
+      <option value="-calculated_at">جدیدترین ارزیابی</option>
+    </select>
+  </div>
+
+  <div style="display:flex; gap:0.5rem; align-self: flex-end;">
+    <button id="btn-filter" class="btn btn-primary">اعمال فیلتر</button>
+  </div>
+</div>
+
+<!-- Summary count -->
+<div style="margin-bottom:1.25rem; font-size:0.92rem; color:var(--text-secondary);">
+  موارد غیرعادی آماری شناسایی‌شده: <strong id="anomaly-total-count" style="color:var(--accent-rose);">۰</strong> مورد
+</div>
+
+<!-- Anomaly Cards Grid -->
+<div id="anomalies-grid" class="grid-2">
+  <!-- Dynamic cards loaded via JS -->
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadAnomalies() {
+  const container = document.getElementById('anomalies-grid');
+  container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:2rem; color:var(--text-muted);">در حال دریافت تحلیل‌های آماری...</div>';
+
+  const params = new URLSearchParams();
+  const dist = document.getElementById('filter-district').value;
+  if (dist) params.set('district', dist);
+
+  const detector = document.getElementById('filter-detector').value;
+  if (detector) params.set('detector_name', detector);
+
+  const confidence = document.getElementById('filter-confidence').value;
+  if (confidence) params.set('confidence', confidence);
+
+  const ordering = document.getElementById('filter-ordering').value;
+  if (ordering) params.set('ordering', ordering);
+
+  try {
+    const res = await fetch(`/api/anomalies/?${params.toString()}`);
+    const data = await res.json();
+    const results = data.results || [];
+
+    document.getElementById('anomaly-total-count').innerText = toPersianDigits(data.count || results.length);
+
+    if (results.length === 0) {
+      container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:3rem; color:var(--text-muted);">هیچ مورد نامتعارفی با فیلترهای کنونی ثبت نشده است.</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    results.forEach(item => {
+      const listing = item.listing || {};
+      const metrics = item.metrics || {};
+      const devPct = item.score !== null ? item.score : (metrics.difference_percent || 0);
+
+      const isUnder = devPct < 0;
+      const devText = isUnder ? `${Math.abs(devPct)}٪ پایین‌تر از میانه همتایان` : `${Math.abs(devPct)}٪ بالاتر از میانه همتایان`;
+      const devColor = isUnder ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.borderColor = 'rgba(244, 63, 94, 0.3)';
+      card.style.background = 'linear-gradient(180deg, rgba(244, 63, 94, 0.05), var(--bg-card))';
+
+      card.innerHTML = `
+        <div class="card-header">
+          <div>
+            <span class="badge-anomaly">نامتعارف آماری</span>
+            <span style="font-size:0.75rem; color:var(--text-muted); margin-right:0.5rem;">
+              روش: ${item.detector_name}
+            </span>
+          </div>
+          <span style="font-size:0.78rem; font-weight:700; color:var(--accent-cyan);">
+            ${item.confidence_display || item.confidence}
+          </span>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <h3 style="font-size:1.1rem; font-weight:700; color:#fff; margin-bottom:0.25rem;">
+            ${listing.title || 'ملک در تهران'}
+          </h3>
+          <div style="font-size:0.8rem; color:var(--text-secondary);">
+            منطقه ${toPersianDigits(listing.district || '—')} • ${listing.neighborhood || 'محدوده تهران'}
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.75rem; margin-bottom:1rem; background:var(--bg-secondary); padding:0.85rem; border-radius:var(--radius-sm);">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">قیمت هر متر مربع</div>
+            <div style="font-size:1.15rem; font-weight:800; color:#fff;">
+              ${listing.price_per_m2_formatted || '—'}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">میزان انحراف</div>
+            <div style="font-size:1.15rem; font-weight:800; color:${devColor};">
+              ${toPersianDigits(devText)}
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:0.82rem; color:var(--text-secondary); line-height:1.6; margin-bottom:1rem; background:rgba(255,255,255,0.03); padding:0.75rem; border-radius:var(--radius-sm);">
+          <strong>شرح تحلیل:</strong> ${item.explanation || 'مشاهده نامتعارف نسبت به توزیع آماری همتایان.'}
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; font-size:0.78rem; color:var(--text-muted);">
+          <span>حجم نمونه همتا: <strong>${toPersianDigits(item.sample_size)} ملک</strong></span>
+          <a href="/listings/${listing.divar_token}/" class="btn btn-secondary" style="padding:0.35rem 0.8rem; font-size:0.8rem;">
+            مشاهده تحلیل و املاک همتا ←
+          </a>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error('Error loading anomalies:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadAnomalies();
+  document.getElementById('btn-filter').addEventListener('click', loadAnomalies);
+});
+</script>
+{% endblock %}

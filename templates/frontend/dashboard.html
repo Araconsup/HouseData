@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">
+      <span>داشبورد بازار مسکن تهران</span>
+    </h1>
+    <p class="page-desc">
+      شاخص‌های آماری، توزیع قیمت‌ها و املاک غیرعادی شناسایی‌شده بر پایه الگوریتم‌های هوش داده
+    </p>
+  </div>
+</div>
+
+<!-- Dynamic Filter Controls -->
+<div class="filter-bar">
+  <div class="form-group" style="max-width: 220px;">
+    <label class="form-label">منطقه شهرداری تهران</label>
+    <select id="filter-district" class="form-select">
+      <option value="">همه مناطق ۲۲ گانه</option>
+      {% for dist_num, dist in districts.items %}
+        <option value="{{ dist_num }}">{{ dist.name_fa }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group" style="max-width: 220px;">
+    <label class="form-label">نوع معامله / رده ملک</label>
+    <select id="filter-category" class="form-select">
+      <option value="">همه معاملات (فروش و رهن)</option>
+      {% for cat_val, cat_label in categories %}
+        <option value="{{ cat_val }}">{{ cat_label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="display:flex; align-items:flex-end; gap:0.5rem; margin-top: auto;">
+    <button id="btn-apply-filters" class="btn btn-primary">
+      <span>اعمال فیلترها</span>
+    </button>
+    <button id="btn-reset-filters" class="btn btn-secondary">
+      <span>بازنشانی</span>
+    </button>
+  </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-title">تعداد آگهی‌های جمع‌آوری‌شده</div>
+    <div class="kpi-value rtl-text" id="kpi-total-listings">—</div>
+    <div class="kpi-sub">
+      <span>مجموع نمونه‌های ثبت‌شده</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">آگهی‌های فعال در پایش</div>
+    <div class="kpi-value rtl-text" id="kpi-active-listings">—</div>
+    <div class="kpi-sub positive">
+      <span>مشاهده در پایش اخیر</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">میانه قیمت هر متر مربع (فروش)</div>
+    <div class="kpi-value rtl-text" id="kpi-median-sqm" style="color:var(--accent-cyan); font-size:1.45rem;">—</div>
+    <div class="kpi-sub">
+      <span>بر مبنای شاخص میانه مقاوم</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">میانه قیمت کل ملک</div>
+    <div class="kpi-value rtl-text" id="kpi-median-total" style="color:var(--accent-emerald); font-size:1.45rem;">—</div>
+    <div class="kpi-sub">
+      <span>کل شهر تهران</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">آگهی‌های جدید (هفته اخیر)</div>
+    <div class="kpi-value rtl-text" id="kpi-new-week">—</div>
+    <div class="kpi-sub positive">
+      <span>ورود داده جدید</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-title">املاک با کاهش قیمت</div>
+    <div class="kpi-value rtl-text" id="kpi-price-drops" style="color:var(--accent-amber);">—</div>
+    <div class="kpi-sub warning">
+      <span>ثبت در تاریخچه قیمت</span>
+    </div>
+  </div>
+
+  <div class="kpi-card" style="border-color: rgba(244, 63, 94, 0.4);">
+    <div class="kpi-title">املاک نامتعارف آماری</div>
+    <div class="kpi-value rtl-text" id="kpi-anomalies" style="color:var(--accent-rose);">—</div>
+    <div class="kpi-sub negative">
+      <span>انحراف معنادار از همتایان</span>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Grid Row 1 -->
+<div class="grid-2">
+  <!-- District Comparison Chart -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">مقایسه میانه قیمت هر متر مربع به تفکیک مناطق تهران</h3>
+        <p class="card-subtitle">میلیون تومان به ازای هر مترمربع (فروش مسکونی)</p>
+      </div>
+    </div>
+    <div style="height: 340px; position: relative;">
+      <canvas id="chart-districts"></canvas>
+    </div>
+  </div>
+
+  <!-- Price/m² Distribution Histogram -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">توزیع فراوانی قیمت هر متر مربع در تهران</h3>
+        <p class="card-subtitle">تعداد آگهی‌های مشاهده‌شده در بازه‌های قیمتی</p>
+      </div>
+    </div>
+    <div style="height: 340px; position: relative;">
+      <canvas id="chart-distribution"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Grid Row 2 -->
+<div class="grid-2">
+  <!-- Area vs Price Scatter -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">نمودار پراکندگی: متراژ در برابر قیمت کل</h3>
+        <p class="card-subtitle">نقاط قرمز نشان‌دهنده موارد نامتعارف آماری (Outliers) هستند</p>
+      </div>
+    </div>
+    <div style="height: 340px; position: relative;">
+      <canvas id="chart-scatter"></canvas>
+    </div>
+  </div>
+
+  <!-- Building Age vs Price per m2 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">تأثیر سن بنا بر میانه قیمت هر متر مربع</h3>
+        <p class="card-subtitle">بررسی رابطه افت قیمت با افزایش سال ساخت</p>
+      </div>
+    </div>
+    <div style="height: 340px; position: relative;">
+      <canvas id="chart-age"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let districtChart = null;
+let distributionChart = null;
+let scatterChart = null;
+let ageChart = null;
+
+async function loadDashboardData() {
+  try {
+    const response = await fetch('/api/statistics/dashboard-summary/');
+    const data = await response.json();
+
+    // Render KPIs
+    const kpis = data.kpis;
+    document.getElementById('kpi-total-listings').innerText = toPersianDigits(kpis.total_listings_collected.toLocaleString());
+    document.getElementById('kpi-active-listings').innerText = toPersianDigits(kpis.active_listings.toLocaleString());
+    document.getElementById('kpi-median-sqm').innerText = kpis.median_price_per_m2_formatted || '—';
+    document.getElementById('kpi-median-total').innerText = kpis.median_total_price_formatted || '—';
+    document.getElementById('kpi-new-week').innerText = toPersianDigits(kpis.new_listings_week.toLocaleString());
+    document.getElementById('kpi-price-drops').innerText = toPersianDigits(kpis.price_reductions_count.toLocaleString());
+    document.getElementById('kpi-anomalies').innerText = toPersianDigits(kpis.anomalies_count.toLocaleString());
+
+    const charts = data.charts;
+
+    // 1. District Comparison Chart
+    const dLabels = charts.districts.map(d => toPersianDigits(d.district) + ' (' + d.label.replace('منطقه ', '') + ')');
+    const dValues = charts.districts.map(d => d.median_price_per_m2 ? (d.median_price_per_m2 / 1_000_000) : 0);
+
+    const ctxDist = document.getElementById('chart-districts').getContext('2d');
+    if (districtChart) districtChart.destroy();
+    districtChart = new Chart(ctxDist, {
+      type: 'bar',
+      data: {
+        labels: dLabels,
+        datasets: [{
+          label: 'میانه قیمت هر متر (میلیون تومان)',
+          data: dValues,
+          backgroundColor: 'rgba(6, 182, 212, 0.65)',
+          borderColor: '#06b6d4',
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${toPersianDigits(ctx.raw.toFixed(1))} میلیون تومان/متر`
+            }
+          }
+        },
+        scales: {
+          y: {
+            ticks: {
+              callback: val => toPersianDigits(val) + ' م'
+            }
+          }
+        }
+      }
+    });
+
+    // 2. Price Distribution Chart
+    const distLabels = charts.distribution.map(d => d.label);
+    const distCounts = charts.distribution.map(d => d.count);
+
+    const ctxDistrib = document.getElementById('chart-distribution').getContext('2d');
+    if (distributionChart) distributionChart.destroy();
+    distributionChart = new Chart(ctxDistrib, {
+      type: 'bar',
+      data: {
+        labels: distLabels,
+        datasets: [{
+          label: 'تعداد آگهی',
+          data: distCounts,
+          backgroundColor: 'rgba(59, 130, 246, 0.65)',
+          borderColor: '#3b82f6',
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: {
+            ticks: { callback: val => toPersianDigits(val) }
+          }
+        }
+      }
+    });
+
+    // 3. Scatter Chart: Area vs Total Price
+    const normalPoints = charts.scatter.filter(p => !p.is_anomaly).map(p => ({
+      x: p.area_m2,
+      y: p.price / 1_000_000_000,
+    }));
+    const anomalyPoints = charts.scatter.filter(p => p.is_anomaly).map(p => ({
+      x: p.area_m2,
+      y: p.price / 1_000_000_000,
+    }));
+
+    const ctxScatter = document.getElementById('chart-scatter').getContext('2d');
+    if (scatterChart) scatterChart.destroy();
+    scatterChart = new Chart(ctxScatter, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: 'آگهی‌های متعارف',
+            data: normalPoints,
+            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+            pointRadius: 4,
+          },
+          {
+            label: 'املاک نامتعارف (Outliers)',
+            data: anomalyPoints,
+            backgroundColor: 'rgba(244, 63, 94, 0.9)',
+            pointRadius: 6,
+            pointHoverRadius: 8,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            title: { display: true, text: 'متراژ (مترمربع)', color: '#94a3b8' },
+            ticks: { callback: val => toPersianDigits(val) }
+          },
+          y: {
+            title: { display: true, text: 'قیمت کل (میلیارد تومان)', color: '#94a3b8' },
+            ticks: { callback: val => toPersianDigits(val) }
+          }
+        }
+      }
+    });
+
+    // 4. Building Age vs Price Chart
+    const ageLabels = charts.building_age.map(a => a.label);
+    const ageValues = charts.building_age.map(a => (a.median_sqm / 1_000_000));
+
+    const ctxAge = document.getElementById('chart-age').getContext('2d');
+    if (ageChart) ageChart.destroy();
+    ageChart = new Chart(ctxAge, {
+      type: 'line',
+      data: {
+        labels: ageLabels,
+        datasets: [{
+          label: 'میانه قیمت هر متر (میلیون تومان)',
+          data: ageValues,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            ticks: { callback: val => toPersianDigits(val) + ' م' }
+          }
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error('Error fetching dashboard summary:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadDashboardData();
+  document.getElementById('btn-apply-filters').addEventListener('click', () => {
+    loadDashboardData();
+  });
+  document.getElementById('btn-reset-filters').addEventListener('click', () => {
+    document.getElementById('filter-district').value = '';
+    document.getElementById('filter-category').value = '';
+    loadDashboardData();
+  });
+});
+</script>
+{% endblock %}

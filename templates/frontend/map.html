@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">نقشه تعاملی مسکن تهران</h1>
+    <p class="page-desc">پراکنش جغرافیایی آگهی‌ها، هیت‌مپ قیمت هر متر مربع و نقاط نامتعارف آماری</p>
+  </div>
+  <div style="display:flex; gap:0.5rem; align-items:center;">
+    <button id="btn-toggle-heatmap" class="btn btn-secondary">
+      <span>🔥 لایه هیت‌مپ قیمت</span>
+    </button>
+  </div>
+</div>
+
+<!-- Map Filter Controls -->
+<div class="filter-bar">
+  <div class="form-group" style="max-width: 220px;">
+    <label class="form-label">منطقه شهرداری</label>
+    <select id="map-filter-district" class="form-select">
+      <option value="">همه مناطق ۲۲ گانه</option>
+      {% for dist_num, dist in districts.items %}
+        <option value="{{ dist_num }}">{{ dist.name_fa }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group" style="max-width: 220px;">
+    <label class="form-label">نوع معامله</label>
+    <select id="map-filter-category" class="form-select">
+      <option value="">همه معاملات</option>
+      {% for cat_val, cat_label in categories %}
+        <option value="{{ cat_val }}">{{ cat_label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group" style="flex:0 0 auto; align-self: flex-end; padding-bottom:0.5rem;">
+    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; cursor:pointer;">
+      <input type="checkbox" id="map-filter-anomaly">
+      <span style="color:var(--accent-rose); font-weight:600;">فقط نقاط نامتعارف آماری</span>
+    </label>
+  </div>
+
+  <div style="display:flex; gap:0.5rem; align-self: flex-end;">
+    <button id="btn-map-filter" class="btn btn-primary">بروزرسانی نقشه</button>
+  </div>
+
+  <div style="margin-right:auto; align-self:center; font-size:0.85rem; color:var(--text-secondary);">
+    نقاط نمایش‌داده‌شده: <strong id="map-point-count" style="color:#fff;">۰</strong>
+  </div>
+</div>
+
+<!-- Map Container -->
+<div class="card" style="padding: 0.5rem; margin-bottom: 2rem;">
+  <div id="tehran-map"></div>
+</div>
+
+<!-- Legend Bar -->
+<div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border-color); padding:1rem 1.5rem; border-radius:var(--radius); flex-wrap:wrap; gap:1rem; font-size:0.82rem;">
+  <div style="display:flex; align-items:center; gap:1.5rem;">
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span style="width:12px; height:12px; border-radius:50%; background:#06b6d4; display:inline-block;"></span>
+      <span>املاک با قیمت متعارف</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span style="width:12px; height:12px; border-radius:50%; background:#f43f5e; display:inline-block;"></span>
+      <span>املاک نامتعارف آماری (Outliers)</span>
+    </div>
+  </div>
+  <div style="color:var(--text-muted);">
+    * مختصات بر پایه موقعیت جغرافیایی تقریبی برگشتی از API رسمی دیوار است.
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let map = null;
+let markersLayer = null;
+let heatLayer = null;
+let showHeatmap = false;
+let currentPoints = [];
+
+function initMap() {
+  // Center on Tehran
+  map = L.map('tehran-map').setView([35.7219, 51.3890], 12);
+
+  // CartoDB Dark Matter tile layer for slick modern dark dashboard look
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  markersLayer = L.layerGroup().addTo(map);
+
+  loadMapData();
+
+  document.getElementById('btn-map-filter').addEventListener('click', () => loadMapData());
+  document.getElementById('btn-toggle-heatmap').addEventListener('click', toggleHeatmap);
+}
+
+async function loadMapData() {
+  const params = new URLSearchParams();
+  const dist = document.getElementById('map-filter-district').value;
+  if (dist) params.set('district', dist);
+
+  const cat = document.getElementById('map-filter-category').value;
+  if (cat) params.set('category', cat);
+
+  const isAnomaly = document.getElementById('map-filter-anomaly').checked;
+  if (isAnomaly) params.set('is_anomaly', 'true');
+
+  try {
+    const res = await fetch(`/api/listings/map-points/?${params.toString()}`);
+    const data = await res.json();
+    currentPoints = data.points;
+
+    document.getElementById('map-point-count').innerText = toPersianDigits(currentPoints.length.toLocaleString());
+
+    renderMapPoints();
+  } catch (err) {
+    console.error('Error loading map points:', err);
+  }
+}
+
+function renderMapPoints() {
+  markersLayer.clearLayers();
+  if (heatLayer) {
+    map.removeLayer(heatLayer);
+    heatLayer = null;
+  }
+
+  const heatData = [];
+
+  currentPoints.forEach(p => {
+    if (!p.latitude || !p.longitude) return;
+
+    const isAnomaly = p.is_anomaly;
+    const color = isAnomaly ? '#f43f5e' : '#06b6d4';
+    const radius = isAnomaly ? 8 : 6;
+
+    // Circle Marker
+    const marker = L.circleMarker([p.latitude, p.longitude], {
+      radius: radius,
+      fillColor: color,
+      color: '#fff',
+      weight: 1.5,
+      opacity: 0.9,
+      fillOpacity: 0.85
+    });
+
+    const popupHtml = `
+      <div style="direction:rtl; font-family:Vazirmatn, sans-serif; min-width:210px;">
+        <div style="font-weight:700; font-size:0.95rem; margin-bottom:0.35rem; color:#fff;">${p.title}</div>
+        <div style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.5rem;">
+          منطقه ${toPersianDigits(p.district || '—')} • ${p.neighborhood || ''}
+        </div>
+        <div style="background:rgba(255,255,255,0.06); padding:0.5rem; border-radius:6px; margin-bottom:0.6rem;">
+          <div style="font-size:0.82rem; color:#34d399; font-weight:700;">قیمت: ${p.price_formatted}</div>
+          <div style="font-size:0.78rem; color:#06b6d4; margin-top:2px;">متری: ${p.price_per_m2_formatted}</div>
+          <div style="font-size:0.75rem; color:#94a3b8; margin-top:2px;">متراژ: ${toPersianDigits(Math.round(p.area_m2 || 0))} متر • ${toPersianDigits(p.rooms || '—')} خواب</div>
+        </div>
+        ${isAnomaly ? `
+          <div style="margin-bottom:0.6rem;">
+            <span style="background:rgba(244,63,94,0.2); color:#fda4af; font-size:0.75rem; padding:2px 6px; border-radius:4px; border:1px solid rgba(244,63,94,0.4); font-weight:700;">
+              ⚠️ نامتعارف آماری (${toPersianDigits(p.anomaly_score)}٪)
+            </span>
+          </div>
+        ` : ''}
+        <a href="/listings/${p.divar_token}/" style="display:block; text-align:center; background:#0ea5e9; color:#fff; padding:0.35rem; border-radius:4px; font-size:0.78rem; font-weight:600; text-decoration:none;">
+          تحلیل کامل و املاک همتا ←
+        </a>
+      </div>
+    `;
+
+    marker.bindPopup(popupHtml);
+    markersLayer.addLayer(marker);
+
+    // Heatmap point (intensity based on price/m2 normalized)
+    const intensity = Math.min(1.0, (p.price_per_m2 || 50_000_000) / 250_000_000);
+    heatData.push([p.latitude, p.longitude, intensity]);
+  });
+
+  if (showHeatmap && heatData.length > 0 && typeof L.heatLayer === 'function') {
+    heatLayer = L.heatLayer(heatData, {
+      radius: 25,
+      blur: 15,
+      maxZoom: 14,
+      gradient: {
+        0.2: '#3b82f6',
+        0.5: '#06b6d4',
+        0.7: '#f59e0b',
+        1.0: '#f43f5e'
+      }
+    }).addTo(map);
+  }
+}
+
+function toggleHeatmap() {
+  showHeatmap = !showHeatmap;
+  const btn = document.getElementById('btn-toggle-heatmap');
+  if (showHeatmap) {
+    btn.classList.remove('btn-secondary');
+    btn.classList.add('btn-primary');
+    btn.innerText = '✓ هیت‌مپ فعال است';
+  } else {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-secondary');
+    btn.innerText = '🔥 لایه هیت‌مپ قیمت';
+  }
+  renderMapPoints();
+}
+
+document.addEventListener('DOMContentLoaded', initMap);
+</script>
+{% endblock %}

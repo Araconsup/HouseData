@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div style="margin-bottom:0.5rem;">
+      <a href="/listings/" style="color:var(--accent-cyan); font-size:0.85rem;">← بازگشت به فهرست املاک</a>
+    </div>
+    <h1 class="page-title">{{ listing.title }}</h1>
+    <p class="page-desc">
+      تهران • منطقه {{ listing.district|default:"نامشخص" }} • {{ listing.neighborhood|default:"محدوده نامشخص" }} • شناسه: {{ listing.divar_token }}
+    </p>
+  </div>
+  <div>
+    {% if listing.source_url %}
+      <a href="{{ listing.source_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+        مشاهده در دیوار ↗
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Main Specs & Valuation Row -->
+<div class="grid-2" style="margin-bottom: 2rem;">
+  <!-- Property Overview Card -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">مشخصات اصلی ملک</h3>
+      <span class="badge-anomaly" style="background:rgba(6, 182, 212, 0.15); color:var(--accent-cyan); border-color:rgba(6, 182, 212, 0.3);">
+        {{ listing.get_category_display }}
+      </span>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+      <div style="background:var(--bg-secondary); padding:1rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+        <div style="font-size:0.8rem; color:var(--text-muted);">قیمت کل آگهی</div>
+        <div style="font-size:1.4rem; font-weight:800; color:var(--accent-emerald); margin-top:0.25rem;">
+          {% if listing.price %}{{ listing.price|floatformat:0 }} تومان{% else %}توافقی{% endif %}
+        </div>
+      </div>
+
+      <div style="background:var(--bg-secondary); padding:1rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+        <div style="font-size:0.8rem; color:var(--text-muted);">قیمت هر متر مربع</div>
+        <div style="font-size:1.4rem; font-weight:800; color:var(--accent-cyan); margin-top:0.25rem;">
+          {% if listing.price_per_m2 %}{{ listing.price_per_m2|floatformat:0 }} تومان/متر{% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="data-table">
+        <tbody>
+          <tr>
+            <td style="color:var(--text-muted); width:40%;">متراژ</td>
+            <td style="font-weight:700;">{{ listing.area_m2|default:"—" }} مترمربع</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);">تعداد اتاق</td>
+            <td>{{ listing.rooms|default:"—" }} خواب</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);">طبقه / کل طبقات</td>
+            <td>طبقه {{ listing.floor|default:"—" }} از {{ listing.total_floors|default:"—" }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);">سن بنا</td>
+            <td>{{ listing.building_age|default:"۰" }} سال ساخت</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);">امکانات کلیدی</td>
+            <td>
+              {% if listing.parking %}✓ پارکینگ{% else %}✗ بدون پارکینگ{% endif %} •
+              {% if listing.elevator %}✓ آسانسور{% else %}✗ بدون آسانسور{% endif %} •
+              {% if listing.storage %}✓ انباری{% else %}✗ بدون انباری{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);">نوع فروشنده</td>
+            <td>{{ listing.seller_type|default:"مشاور یا مالک شخصی" }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);">اولین مشاهده</td>
+            <td>{{ listing.first_seen_at|date:"Y/m/d H:i" }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {% if listing.description %}
+      <div style="margin-top:1.25rem; font-size:0.88rem; color:var(--text-secondary); line-height:1.7; background:var(--bg-secondary); padding:1rem; border-radius:var(--radius-sm);">
+        <strong style="color:#fff; display:block; margin-bottom:0.25rem;">توضیحات آگهی‌دهنده:</strong>
+        {{ listing.description }}
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Comparable Market Analysis (CMA) Card -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">تحلیل املاک مشابه (Comparable Market Analysis)</h3>
+        <p class="card-subtitle">ارزیابی ارزش ملک نسبت به مشاهدات آماری در همان موقعیت و مشخصات</p>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+      <div style="background:var(--bg-secondary); padding:0.85rem; border-radius:var(--radius-sm); border:1px solid var(--border-color); text-align:center;">
+        <div style="font-size:0.75rem; color:var(--text-muted);">ملک هدف</div>
+        <div style="font-size:1.15rem; font-weight:800; color:#fff; margin-top:0.2rem;">
+          {% if listing.price_per_m2 %}{{ listing.price_per_m2|floatformat:0 }} م/متر{% else %}—{% endif %}
+        </div>
+      </div>
+
+      <div style="background:var(--bg-secondary); padding:0.85rem; border-radius:var(--radius-sm); border:1px solid var(--border-color); text-align:center;">
+        <div style="font-size:0.75rem; color:var(--text-muted);">میانه املاک مشابه</div>
+        <div style="font-size:1.15rem; font-weight:800; color:var(--accent-cyan); margin-top:0.2rem;">
+          {% if metrics.median_sqm %}{{ metrics.median_sqm|floatformat:0 }} م/متر{% else %}—{% endif %}
+        </div>
+      </div>
+
+      <div style="background:var(--bg-secondary); padding:0.85rem; border-radius:var(--radius-sm); border:1px solid var(--border-color); text-align:center;">
+        <div style="font-size:0.75rem; color:var(--text-muted);">انحراف از میانه</div>
+        <div style="font-size:1.15rem; font-weight:800; margin-top:0.2rem; {% if metrics.deviation_percent and metrics.deviation_percent < 0 %}color:var(--accent-rose);{% else %}color:var(--accent-emerald);{% endif %}">
+          {% if metrics.deviation_percent is not None %}
+            {{ metrics.deviation_percent }}%
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Criteria used for selection -->
+    <div style="margin-bottom:1.25rem; background:rgba(6, 182, 212, 0.05); border:1px solid rgba(6, 182, 212, 0.2); padding:0.85rem 1.1rem; border-radius:var(--radius-sm);">
+      <div style="font-size:0.82rem; font-weight:700; color:var(--accent-cyan); margin-bottom:0.35rem;">
+        فاکتورهای اعمال‌شده در انتخاب املاک همتا:
+      </div>
+      <ul style="list-style:inside disc; font-size:0.8rem; color:var(--text-secondary);">
+        {% for c in criteria %}
+          <li>{{ c }}</li>
+        {% empty %}
+          <li>معیارهای عمومی بازار تهران</li>
+        {% endfor %}
+      </ul>
+      <div style="margin-top:0.5rem; font-size:0.78rem; color:var(--text-muted);">
+        حجم نمونه همتایان آماری: <strong>{{ metrics.sample_size }} ملک مشاهده‌شده</strong>
+      </div>
+    </div>
+
+    <!-- Statistical Signals Breakdown -->
+    <div>
+      <div style="font-size:0.88rem; font-weight:700; color:#fff; margin-bottom:0.6rem;">
+        شواهد تشخیصی مدل‌های داده‌کاوی:
+      </div>
+      <div style="display:flex; flex-direction:column; gap:0.5rem;">
+        {% for ar in anomaly_results %}
+          <div style="background:var(--bg-secondary); padding:0.75rem; border-radius:var(--radius-sm); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span style="font-weight:700; font-size:0.82rem; color:var(--text-primary);">
+                {% if ar.detector_name == "iqr" %}چارک‌ها (IQR)
+                {% elif ar.detector_name == "robust_zscore" %}زد-اسکور مقاوم (Robust Z)
+                {% elif ar.detector_name == "isolation_forest" %}جنگل ایزولاسیون (Isolation Forest)
+                {% elif ar.detector_name == "comparable_deviation" %}انحراف از میانه محلی
+                {% else %}مدل تجمیعی (Ensemble){% endif %}
+              </span>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+                {{ ar.explanation }}
+              </div>
+            </div>
+            <div>
+              {% if ar.is_anomaly %}
+                <span class="badge-anomaly">نامتعارف</span>
+              {% else %}
+                <span style="font-size:0.75rem; color:var(--accent-emerald);">متعارف</span>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <div style="font-size:0.82rem; color:var(--text-muted); text-align:center; padding:1rem;">
+            ارزیابی الگوریتمی در پردازش پس‌زمینه در نوبت قرار دارد.
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Price History Snapshots Section -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">تاریخچه تغییرات قیمت ملک (Price History Snapshots)</h3>
+      <p class="card-subtitle">رهگیری کاهش، افزایش یا تغییر متراژ و قیمت پیشنهادی در گذر زمان</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>تاریخ ثبت و مشاهده</th>
+          <th>قیمت کل پیشنهادی</th>
+          <th>قیمت هر متر مربع</th>
+          <th>تغییر نسبت به مشاهده قبل</th>
+          <th>نوع رویداد</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for snap in snapshots %}
+          <tr>
+            <td>{{ snap.captured_at|date:"Y/m/d H:i" }}</td>
+            <td style="font-weight:700;">{{ snap.price|default:"—" }} تومان</td>
+            <td>{{ snap.price_per_m2|default:"—" }} تومان/متر</td>
+            <td>
+              {% if snap.price_change_percent != 0 %}
+                <span style="{% if snap.price_change_percent < 0 %}color:var(--accent-emerald);{% else %}color:var(--accent-rose);{% endif %} font-weight:700;">
+                  {% if snap.price_change_percent < 0 %}▼{% else %}▲{% endif %} {{ snap.price_change_percent }}%
+                </span>
+              {% else %}
+                <span style="color:var(--text-muted);">بدون تغییر</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if snap.event_type == "price_decrease" %}
+                <span style="color:var(--accent-emerald);">کاهش قیمت پیشنهادی</span>
+              {% elif snap.event_type == "price_increase" %}
+                <span style="color:var(--accent-rose);">افزایش قیمت</span>
+              {% elif snap.event_type == "initial" %}
+                <span style="color:var(--accent-cyan);">مشاهده اولیه</span>
+              {% else %}
+                <span>{{ snap.event_type }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" style="text-align:center; color:var(--text-muted); padding:2rem;">
+              تنها یک رویداد ثبت برای این ملک مشاهده شده است.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Local Comparable Listings Table -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">فهرست املاک همتا در گروه مقایسه ({{ comparables|length }} مورد)</h3>
+      <p class="card-subtitle">آگهی‌های همگن که مبنای محاسبه میانه و فاصله‌های آماری قرار گرفته‌اند</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>عنوان آگهی</th>
+          <th>محله / منطقه</th>
+          <th>متراژ</th>
+          <th>اتاق</th>
+          <th>سن بنا</th>
+          <th>قیمت هر متر مربع</th>
+          <th>قیمت کل</th>
+          <th>عملیات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for comp in comparables %}
+          <tr>
+            <td style="font-weight:600;">{{ comp.title }}</td>
+            <td>منطقه {{ comp.district|default:"—" }} • {{ comp.neighborhood|default:"—" }}</td>
+            <td>{{ comp.area_m2|floatformat:0 }} متر</td>
+            <td>{{ comp.rooms|default:"—" }}</td>
+            <td>{{ comp.building_age|default:"۰" }} سال</td>
+            <td style="color:var(--accent-cyan); font-weight:700;">{{ comp.price_per_m2|default:"—" }} تومان</td>
+            <td>{{ comp.price|default:"—" }} تومان</td>
+            <td>
+              <a href="/listings/{{ comp.divar_token }}/" class="btn btn-secondary" style="padding:0.25rem 0.6rem; font-size:0.75rem;">
+                تحلیل ملک ←
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="8" style="text-align:center; color:var(--text-muted); padding:2rem;">
+              نمونه همتای کافی در پایگاه داده جهت مقایسه یافت نشد.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
